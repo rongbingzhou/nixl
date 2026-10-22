@@ -22,7 +22,10 @@
 #include <iomanip>
 #include <sstream>
 #include <atomic>
+#include <cstdlib>
 #include <cstring>
+#include <mutex>
+#include <strings.h>
 
 #include <rdma/fabric.h>
 #include <rdma/fi_domain.h>
@@ -110,6 +113,46 @@ getAvailableNetworkDevices() {
 
     NIXL_ERROR << "No network devices found with any provider";
     return {"none", {}};
+}
+
+void
+configureEfaUnsolicitedWriteRecv() {
+    static std::once_flag once;
+    std::call_once(once, [] {
+        constexpr const char *env_name = "FI_EFA_USE_UNSOLICITED_WRITE_RECV";
+        const uint32_t runtime_version = fi_version();
+        // The feature (enabled by default) and its environment variable exist since libfabric 2.0.
+        if (!FI_VERSION_GE(runtime_version, FI_VERSION(2, 0))) {
+            return;
+        }
+#ifdef HAVE_FI_OPT_EFA_USE_UNSOLICITED_WRITE_RECV
+        // Each EFA endpoint disables the feature with fi_setopt(), which libfabric >= 2.5 supports.
+        if (FI_VERSION_GE(runtime_version, FI_VERSION(2, 5))) {
+            return;
+        }
+#endif
+        const char *value = getenv(env_name);
+        if (!value) {
+            setenv(env_name, "0", 0);
+            NIXL_INFO << "Set " << env_name
+                      << "=0 to disable EFA unsolicited write recv on libfabric "
+                      << FI_MAJOR(runtime_version) << "." << FI_MINOR(runtime_version)
+                      << ". This has no effect if libfabric's EFA provider was already initialized "
+                         "in this process; set it in the environment before starting to be sure";
+            return;
+        }
+        // The spellings libfabric accepts as false for a boolean parameter.
+        for (const char *off : {"0", "no", "off", "false"}) {
+            if (strcasecmp(value, off) == 0) {
+                return;
+            }
+        }
+        NIXL_WARN
+            << env_name << "=" << value
+            << " keeps EFA unsolicited write recv enabled. NIXL normally disables it: with it "
+               "enabled, remote write completions can be lost under load and transfer "
+               "notifications never arrive. Unset it or set it to 0";
+    });
 }
 
 std::string

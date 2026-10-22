@@ -199,6 +199,9 @@ nixlLibfabricRailManager::nixlLibfabricRailManager(size_t striping_threshold)
     NIXL_DEBUG << "Creating rail manager with striping threshold: " << striping_threshold_
                << " bytes";
 
+    // Before topology discovery, which makes the first fi_getinfo() call.
+    LibfabricUtils::configureEfaUnsolicitedWriteRecv();
+
     // Initialize topology system
     topology = std::make_unique<nixlLibfabricTopology>();
 

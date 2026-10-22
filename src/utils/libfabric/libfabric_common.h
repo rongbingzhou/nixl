@@ -313,6 +313,16 @@ resetSeqId();
 
 // Utility functions
 namespace LibfabricUtils {
+/**
+ * @brief Disables EFA unsolicited write recv via FI_EFA_USE_UNSOLICITED_WRITE_RECV when the
+ *        per-endpoint fi_setopt() cannot (built without the option, or runtime libfabric < 2.5).
+ *        Warns if the user explicitly enabled it.
+ * @note Must run before the first fi_getinfo() in the process: the EFA provider reads its
+ *       environment once, when it initializes.
+ */
+void
+configureEfaUnsolicitedWriteRecv();
+
 // Device discovery with fallback to sockets
 std::pair<std::string, std::vector<std::string>>
 getAvailableNetworkDevices();
